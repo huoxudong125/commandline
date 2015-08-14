@@ -1,74 +1,72 @@
-﻿// Copyright 2005-2013 Giacomo Stelluti Scala & Contributors. All rights reserved. See doc/License.md in the project root for license information.
+﻿// Copyright 2005-2015 Giacomo Stelluti Scala & Contributors. All rights reserved. See License.md in the project root for license information.
 
 using System;
-using CommandLine.Infrastructure;
+using System.Collections.Generic;
+using System.Linq;
+using CSharpx;
 
 namespace CommandLine.Core
 {
-    internal sealed class OptionSpecification : Specification
+    sealed class OptionSpecification : Specification
     {
         private readonly string shortName;
         private readonly string longName;
+        private readonly char separator;
         private readonly string setName;
-        private readonly string helpText;
-        private readonly string metaValue;
-        private readonly System.Collections.Generic.IEnumerable<string> enumValues;
 
-        public OptionSpecification(string shortName, string longName, bool required, string setName, int min, int max, Maybe<object> defaultValue, System.Type conversionType, string helpText, string metaValue, System.Collections.Generic.IEnumerable<string> enumValues)
-            : base(SpecificationType.Option, required, min, max, defaultValue, conversionType)
+        public OptionSpecification(string shortName, string longName, bool required, string setName, Maybe<int> min, Maybe<int> max,
+            char separator, Maybe<object> defaultValue, string helpText, string metaValue, IEnumerable<string> enumValues,
+            Type conversionType, TargetType targetType)
+            : base(SpecificationType.Option, required, min, max, defaultValue, helpText, metaValue, enumValues, conversionType, targetType)
         {
             this.shortName = shortName;
             this.longName = longName;
+            this.separator = separator;
             this.setName = setName;
-            this.helpText = helpText;
-            this.metaValue = metaValue;
-            this.enumValues = enumValues;
         }
 
-        public static OptionSpecification FromAttribute(OptionAttribute attribute, System.Type conversionType, System.Collections.Generic.IEnumerable<string> enumValues)
+        public static OptionSpecification FromAttribute(OptionAttribute attribute, Type conversionType, IEnumerable<string> enumValues)
         {
             return new OptionSpecification(
                 attribute.ShortName,
                 attribute.LongName,
                 attribute.Required,
                 attribute.SetName,
-                attribute.Min,
-                attribute.Max,
-                attribute.DefaultValue.ToMaybe(),
-                conversionType,
+                attribute.Min == -1 ? Maybe.Nothing<int>() : Maybe.Just(attribute.Min),
+                attribute.Max == -1 ? Maybe.Nothing<int>() : Maybe.Just(attribute.Max),
+                attribute.Separator,
+                attribute.Default.ToMaybe(),
                 attribute.HelpText,
                 attribute.MetaValue,
-                enumValues);
+                enumValues,
+                conversionType,
+                conversionType.ToTargetType());
+        }
+
+        public static OptionSpecification NewSwitch(string shortName, string longName, bool required, string helpText, string metaValue)
+        {
+            return new OptionSpecification(shortName, longName, required, string.Empty, Maybe.Nothing<int>(), Maybe.Nothing<int>(),
+                '\0', Maybe.Nothing<object>(), helpText, metaValue, Enumerable.Empty<string>(), typeof(bool), TargetType.Switch);
         }
 
         public string ShortName
         {
-            get { return this.shortName; }
+            get { return shortName; }
         }
 
         public string LongName
         {
-            get { return this.longName; }
+            get { return longName; }
+        }
+
+        public char Separator
+        {
+            get { return separator; }
         }
 
         public string SetName
         {
-            get { return this.setName; }
-        }
-
-        public string HelpText
-        {
-            get { return this.helpText; }
-        }
-
-        public string MetaValue
-        {
-            get { return this.metaValue; }
-        }
-
-        public System.Collections.Generic.IEnumerable<string> EnumValues
-        {
-            get { return this.enumValues; }
+            get { return setName; }
         }
     }
 }

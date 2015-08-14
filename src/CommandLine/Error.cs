@@ -1,4 +1,4 @@
-﻿// Copyright 2005-2013 Giacomo Stelluti Scala & Contributors. All rights reserved. See doc/License.md in the project root for license information.
+﻿// Copyright 2005-2015 Giacomo Stelluti Scala & Contributors. All rights reserved. See License.md in the project root for license information.
 
 using System;
 
@@ -38,6 +38,10 @@ namespace CommandLine
         /// </summary>
         SequenceOutOfRangeError,
         /// <summary>
+        /// Value of <see cref="CommandLine.RepeatedOptionError"/> type.
+        /// </summary>
+        RepeatedOptionError,
+        /// <summary>
         /// Value of <see cref="CommandLine.NoVerbSelectedError"/> type.
         /// </summary>
         NoVerbSelectedError,
@@ -52,7 +56,11 @@ namespace CommandLine
         /// <summary>
         /// Value of <see cref="CommandLine.HelpVerbRequestedError"/> type.
         /// </summary>
-        HelpVerbRequestedError
+        HelpVerbRequestedError,
+        /// <summary>
+        /// Value of <see cref="CommandLine.VersionRequestedError"/> type.
+        /// </summary>
+        VersionRequestedError
     }
 
     /// <summary>
@@ -62,10 +70,26 @@ namespace CommandLine
     public abstract class Error : IEquatable<Error>
     {
         private readonly ErrorType tag;
+        private readonly bool stopsProcessing;
 
-        internal Error(ErrorType tag)
+        /// <summary>
+        /// Initializes a new instance of the <see cref="CommandLine.Error"/> class.
+        /// </summary>
+        /// <param name="tag">Type discriminator tag.</param>
+        /// <param name="stopsProcessing">Tells if error stops parsing process.</param>
+        protected internal Error(ErrorType tag, bool stopsProcessing)
         {
             this.tag = tag;
+            this.stopsProcessing = stopsProcessing;
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="CommandLine.Error"/> class.
+        /// </summary>
+        /// <param name="tag">Type discriminator tag.</param>
+        protected internal Error(ErrorType tag)
+            : this(tag, false)
+        {
         }
 
         /// <summary>
@@ -73,7 +97,16 @@ namespace CommandLine
         /// </summary>
         public ErrorType Tag
         {
-            get { return this.tag; }
+            get { return tag; }
+        }
+
+        /// <summary>
+        /// Tells if error stops parsing process.
+        /// Filtered by <see cref="CommandLine.ErrorExtensions.OnlyMeaningfulOnes(System.Collections.Generic.IEnumerable{Error})"/>.
+        /// </summary>
+        public bool StopsProcessing
+        {
+            get { return stopsProcessing; }
         }
 
         /// <summary>
@@ -86,7 +119,7 @@ namespace CommandLine
             var other = obj as Error;
             if (other != null)
             {
-                return this.Equals(other);
+                return Equals(other);
             }
 
             return base.Equals(obj);
@@ -98,7 +131,7 @@ namespace CommandLine
         /// <remarks>A hash code for the current <see cref="System.Object"/>.</remarks>
         public override int GetHashCode()
         {
-            return this.Tag.GetHashCode();
+            return new { Tag, StopsProcessing }.GetHashCode();
         }
 
         /// <summary>
@@ -113,7 +146,7 @@ namespace CommandLine
                 return false;
             }
 
-            return this.Tag.Equals(other.Tag);
+            return Tag.Equals(other.Tag);
         }
     }
 
@@ -124,7 +157,7 @@ namespace CommandLine
     {
         private readonly string token;
 
-        internal TokenError(ErrorType tag, string token)
+        protected internal TokenError(ErrorType tag, string token)
             : base(tag)
         {
             if (token == null) throw new ArgumentNullException("token");
@@ -137,7 +170,7 @@ namespace CommandLine
         /// </summary>
         public string Token
         {
-            get { return this.token; }
+            get { return token; }
         }
 
         /// <summary>
@@ -150,7 +183,7 @@ namespace CommandLine
             var other = obj as TokenError;
             if (other != null)
             {
-                return this.Equals(other);
+                return Equals(other);
             }
 
             return base.Equals(obj);
@@ -162,7 +195,7 @@ namespace CommandLine
         /// <remarks>A hash code for the current <see cref="System.Object"/>.</remarks>
         public override int GetHashCode()
         {
-            return this.Tag.GetHashCode() ^ this.Token.GetHashCode();
+            return new {Tag, StopsProcessing, Token}.GetHashCode();
         }
 
         /// <summary>
@@ -177,7 +210,7 @@ namespace CommandLine
                 return false;
             }
 
-            return this.Tag.Equals(other.Tag) && this.Token.Equals(other.Token);
+            return Tag.Equals(other.Tag) && Token.Equals(other.Token);
         }
     }
 
@@ -199,7 +232,7 @@ namespace CommandLine
     {
         private readonly NameInfo nameInfo;
 
-        internal NamedError(ErrorType tag, NameInfo nameInfo)
+        protected internal NamedError(ErrorType tag, NameInfo nameInfo)
             : base(tag)
         {
             this.nameInfo = nameInfo;
@@ -210,7 +243,7 @@ namespace CommandLine
         /// </summary>
         public NameInfo NameInfo
         {
-            get { return this.nameInfo; }
+            get { return nameInfo; }
         }
 
         /// <summary>
@@ -223,7 +256,7 @@ namespace CommandLine
             var other = obj as NamedError;
             if (other != null)
             {
-                return this.Equals(other);
+                return Equals(other);
             }
 
             return base.Equals(obj);
@@ -235,7 +268,7 @@ namespace CommandLine
         /// <remarks>A hash code for the current <see cref="System.Object"/>.</remarks>
         public override int GetHashCode()
         {
-            return this.Tag.GetHashCode() ^ this.NameInfo.GetHashCode();
+            return new {Tag, StopsProcessing, NameInfo}.GetHashCode();
         }
 
         /// <summary>
@@ -250,7 +283,7 @@ namespace CommandLine
                 return false;
             }
 
-            return this.Tag.Equals(other.Tag) && this.NameInfo.Equals(other.NameInfo);
+            return Tag.Equals(other.Tag) && NameInfo.Equals(other.NameInfo);
         }
     }
 
@@ -292,9 +325,20 @@ namespace CommandLine
     /// </summary>
     public sealed class MutuallyExclusiveSetError : NamedError
     {
-        internal MutuallyExclusiveSetError(NameInfo nameInfo)
+        private readonly string setName;
+
+        internal MutuallyExclusiveSetError(NameInfo nameInfo, string setName)
             : base(ErrorType.MutuallyExclusiveSetError, nameInfo)
         {
+            this.setName = setName;
+        }
+
+        /// <summary>
+        /// Option's set name.
+        /// </summary>
+        public string SetName
+        {
+            get { return setName; }
         }
     }
 
@@ -321,6 +365,17 @@ namespace CommandLine
     }
 
     /// <summary>
+    /// Models an error generated when an option is repeated two or more times.
+    /// </summary>
+    public sealed class RepeatedOptionError : NamedError
+    {
+        internal RepeatedOptionError(NameInfo nameInfo)
+            : base(ErrorType.RepeatedOptionError, nameInfo)
+        {
+        }
+    }
+
+    /// <summary>
     /// Models an error generated when an unknown verb is detected.
     /// </summary>
     public sealed class BadVerbSelectedError : TokenError
@@ -332,18 +387,18 @@ namespace CommandLine
     }
 
     /// <summary>
-    /// Models an error generated when a user explicit requests help.
+    /// Models an error generated when a user explicitly requests help.
     /// </summary>
     public sealed class HelpRequestedError : Error
     {
         internal HelpRequestedError()
-            : base(ErrorType.HelpRequestedError)
+            : base(ErrorType.HelpRequestedError, true)
         {
         }
     }
 
     /// <summary>
-    /// Models an error generated when a user explicit requests help in verb commands scenario.
+    /// Models an error generated when a user explicitly requests help in verb commands scenario.
     /// </summary>
     public sealed class HelpVerbRequestedError : Error
     {
@@ -352,7 +407,7 @@ namespace CommandLine
         private readonly bool matched;
 
         internal HelpVerbRequestedError(string verb, Type type, bool matched)
-            : base(ErrorType.HelpVerbRequestedError)
+            : base(ErrorType.HelpVerbRequestedError, true)
         {
             this.verb = verb;
             this.type = type;
@@ -364,7 +419,7 @@ namespace CommandLine
         /// </summary>
         public string Verb
         {
-            get { return this.verb; }
+            get { return verb; }
         }
 
         /// <summary>
@@ -372,7 +427,7 @@ namespace CommandLine
         /// </summary>
         public Type Type
         {
-            get { return this.type; }
+            get { return type; }
         }
 
         /// <summary>
@@ -380,7 +435,7 @@ namespace CommandLine
         /// </summary>
         public bool Matched
         {
-            get { return this.matched; }
+            get { return matched; }
         }
     }
 
@@ -391,6 +446,17 @@ namespace CommandLine
     {
         internal NoVerbSelectedError()
             : base(ErrorType.NoVerbSelectedError)
+        {
+        }
+    }
+
+    /// <summary>
+    /// Models an error generated when a user explicitly requests version.
+    /// </summary>
+    public sealed class VersionRequestedError : Error
+    {
+        internal VersionRequestedError()
+            : base(ErrorType.VersionRequestedError, true)
         {
         }
     }

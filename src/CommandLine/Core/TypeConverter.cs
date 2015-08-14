@@ -1,27 +1,25 @@
-﻿// Copyright 2005-2013 Giacomo Stelluti Scala & Contributors. All rights reserved. See doc/License.md in the project root for license information.
+﻿// Copyright 2005-2015 Giacomo Stelluti Scala & Contributors. All rights reserved. See License.md in the project root for license information.
 
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using CommandLine.Infrastructure;
+using CSharpx;
+using RailwaySharp.ErrorHandling;
 
 namespace CommandLine.Core
 {
-    internal static class TypeConverter
+    static class TypeConverter
     {
         public static Maybe<object> ChangeType(IEnumerable<string> values, Type conversionType, bool scalar, CultureInfo conversionCulture)
         {
-            if (values == null) throw new ArgumentNullException("values");
-            if (conversionType == null) throw new ArgumentNullException("conversionType");
-            if (conversionCulture == null) throw new ArgumentNullException("conversionCulture");
-
             return scalar
-                ? ChangeType(values.Single(), conversionType, conversionCulture)
-                : ChangeType(values, conversionType, conversionCulture);
+                ? ChangeTypeScalar(values.Single(), conversionType, conversionCulture)
+                : ChangeTypeSequence(values, conversionType, conversionCulture);
         }
 
-        private static Maybe<object> ChangeType(IEnumerable<string> values, System.Type conversionType, CultureInfo conversionCulture)
+        private static Maybe<object> ChangeTypeSequence(IEnumerable<string> values, Type conversionType, CultureInfo conversionCulture)
         {
             var type =
                 conversionType.GetGenericArguments()
@@ -30,47 +28,88 @@ namespace CommandLine.Core
                               .FromJust(
                                   new ApplicationException("Non scalar properties should be sequence of type IEnumerable<T>."));
 
-            var converted = values.Select(value => ChangeType(value, type, conversionCulture));
+            var converted = values.Select(value => ChangeTypeScalar(value, type, conversionCulture));
 
             return converted.Any(a => a.MatchNothing())
                 ? Maybe.Nothing<object>()
-                : Maybe.Just(converted.Select(c => ((Just<object>)c).Value).ToArray(type));
+                : Maybe.Just(converted.Select(c => ((Just<object>)c).Value).ToUntypedArray(type));
         }
 
-        private static Maybe<object> ChangeType(string value, Type conversionType, CultureInfo conversionCulture)
+        private static Maybe<object> ChangeTypeScalar(string value, Type conversionType, CultureInfo conversionCulture)
         {
+            var result = ChangeTypeScalarImpl(value, conversionType, conversionCulture);
+            result.Match((_,__) => { }, e => e.First().RethrowWhenAbsentIn(
+                new[] { typeof(InvalidCastException), typeof(FormatException), typeof(OverflowException) }));
+            return result.ToMaybe();
+        }
+
+        private static Result<object, Exception> ChangeTypeScalarImpl(string value, Type conversionType, CultureInfo conversionCulture)
+        {
+            Func<object> changeType = () =>
+            {
+                Func<object> safeChangeType = () =>
+                {
+                    var isFsOption = ReflectionHelper.IsFSharpOptionType(conversionType);
+
+                    Func<Type> getUnderlyingType =
+                        () =>
+                            isFsOption
+                                ? FSharpOptionHelper.GetUnderlyingType(conversionType)
+                                : Nullable.GetUnderlyingType(conversionType);
+
+                    var type = getUnderlyingType() ?? conversionType;
+
+                    Func<object> withValue =
+                        () =>
+                            isFsOption
+                                ? FSharpOptionHelper.Some(type, Convert.ChangeType(value, type, conversionCulture))
+                                : Convert.ChangeType(value, type, conversionCulture);
+
+                    Func<object> empty = () => isFsOption ? FSharpOptionHelper.None(type) : null;
+
+                    return (value == null) ? empty() : withValue();
+                };
+
+                return value.IsBooleanString()
+                    ? value.ToBoolean() : conversionType.IsEnum
+                        ? value.ToEnum(conversionType) : safeChangeType();
+            };
+
+            Func<object> makeType = () =>
+            {
+                try
+                {
+                    var ctor = conversionType.GetConstructor(new[] { typeof(string) });
+                    return ctor.Invoke(new object[] { value });
+                }
+                catch (Exception)
+                {
+                    throw new FormatException("Destination conversion type must have a constructor that accepts a string.");
+                }
+            };
+
+            return Result.Try(
+                conversionType.IsPrimitiveEx() || ReflectionHelper.IsFSharpOptionType(conversionType)
+                    ? changeType
+                    : makeType);
+        }
+
+        private static object ToEnum(this string value, Type conversionType)
+        {
+            object parsedValue;
             try
             {
-                return Maybe.Just(
-                    MatchBoolString(value)
-                        ? ConvertBoolString(value)
-                        : conversionType.IsEnum
-                            ? Enum.Parse(conversionType, value)
-                            : Convert.ChangeType(value, conversionType, conversionCulture));
+                parsedValue = Enum.Parse(conversionType, value);
             }
-            catch (InvalidCastException)
+            catch (ArgumentException)
             {
-                return Maybe.Nothing<object>();
+                throw new FormatException();
             }
-            catch (FormatException)
+            if (Enum.IsDefined(conversionType, parsedValue))
             {
-                return Maybe.Nothing<object>();
+                return parsedValue;
             }
-            catch (OverflowException)
-            {
-                return Maybe.Nothing<object>();
-            }
-        }
-
-        private static bool MatchBoolString(string value)
-        {
-            return value.Equals("true", StringComparison.OrdinalIgnoreCase)
-                   || value.Equals("false", StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static bool ConvertBoolString(string value)
-        {
-            return value.Equals("true", StringComparison.OrdinalIgnoreCase);
+            throw new FormatException();
         }
     }
 }

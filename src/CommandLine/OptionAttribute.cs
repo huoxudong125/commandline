@@ -1,4 +1,4 @@
-﻿// Copyright 2005-2013 Giacomo Stelluti Scala & Contributors. All rights reserved. See doc/License.md in the project root for license information.
+﻿// Copyright 2005-2015 Giacomo Stelluti Scala & Contributors. All rights reserved. See License.md in the project root for license information.
 
 using System;
 using CommandLine.Infrastructure;
@@ -9,29 +9,22 @@ namespace CommandLine
     /// Models an option specification.
     /// </summary>
     [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = true)]
-    public sealed class OptionAttribute : Attribute
+    public sealed class OptionAttribute : BaseAttribute
     {
         private readonly string longName;
         private readonly string shortName;
         private string setName;
-        private int min;
-        private int max;
-        private object defaultValue;
-        private string helpText;
-        private string metaValue;
+        private char separator;
 
-        private OptionAttribute(string shortName, string longName)
+        private OptionAttribute(string shortName, string longName) : base()
         {
             if (shortName == null) throw new ArgumentNullException("shortName");
             if (longName == null) throw new ArgumentNullException("longName");
 
             this.shortName = shortName;
             this.longName = longName;
-            this.setName = string.Empty;
-            this.min = -1;
-            this.max = -1;
-            this.helpText = string.Empty;
-            this.metaValue = string.Empty;
+            setName = string.Empty;
+            separator = '\0';
         }
 
         /// <summary>
@@ -76,7 +69,7 @@ namespace CommandLine
         /// </summary>
         public string LongName
         {
-            get { return this.longName; }
+            get { return longName; }
         }
 
         /// <summary>
@@ -84,118 +77,31 @@ namespace CommandLine
         /// </summary>
         public string ShortName
         {
-            get { return this.shortName; }
+            get { return shortName; }
         }
-
-        /// <summary>
-        /// Gets or sets a value indicating whether a command line option is required.
-        /// </summary>
-        public bool Required { get; set; }
 
         /// <summary>
         /// Gets or sets the option's mutually exclusive set name.
         /// </summary>
         public string SetName
         {
-            get { return this.setName; }
+            get { return setName; }
             set
             {
-                if (value == null)
-                {
-                    throw new ArgumentNullException("value");
-                }
+                if (value == null) throw new ArgumentNullException("value");
 
-                this.setName = value;
+                setName = value;
             }
         }
 
         /// <summary>
-        /// When applied to <see cref="System.Collections.Generic.IEnumerable{T}"/> properties defines
-        /// the lower range of items.
+        /// When applying attribute to <see cref="System.Collections.Generic.IEnumerable{T}"/> target properties,
+        /// it allows you to split an argument and consume its content as a sequence.
         /// </summary>
-        /// <remarks>If not set, no lower range is enforced.</remarks>
-        public int Min
+        public char Separator
         {
-            get { return this.min; }
-            set
-            {
-                if (value < 0)
-                {
-                    throw new ArgumentNullException("value");
-                }
-
-                this.min = value;
-            }
-        }
-
-        /// <summary>
-        /// When applied to <see cref="System.Collections.Generic.IEnumerable{T}"/> properties defines
-        /// the upper range of items.
-        /// </summary>
-        /// <remarks>If not set, no upper range is enforced.</remarks>
-        public int Max
-        {
-            get { return this.max; }
-            set
-            {
-                if (value < 0)
-                {
-                    throw new ArgumentNullException("value");
-                }
-
-                this.max = value;
-            }
-        }
-
-        /// <summary>
-        /// Gets or sets mapped property default value.
-        /// </summary>
-        public object DefaultValue
-        {
-            get { return this.defaultValue; }
-            set
-            {
-                if (value == null)
-                {
-                    throw new ArgumentNullException("value");
-                }
-
-                this.defaultValue = value;
-            }
-        }
-
-        /// <summary>
-        /// Gets or sets a short description of this command line option. Usually a sentence summary.
-        /// </summary>
-        public string HelpText
-        {
-            get { return this.helpText; }
-            set
-            {
-                if (value == null)
-                {
-                    throw new ArgumentNullException("value");
-                }
-
-                this.helpText = value;
-            }
-        }
-
-        /// <summary>
-        /// Gets or sets mapped property meta value. Usually an uppercase hint of required value type.
-        /// </summary>
-        public string MetaValue
-        {
-            get { return this.metaValue; }
-            set
-            {
-                if (value == null)
-                {
-                    throw new ArgumentNullException("value");
-                }
-
-                this.metaValue = value;
-            }
+            get { return separator ; }
+            set { separator = value; }
         }
     }
 }

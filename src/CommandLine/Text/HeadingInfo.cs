@@ -1,10 +1,11 @@
-﻿// Copyright 2005-2013 Giacomo Stelluti Scala & Contributors. All rights reserved. See doc/License.md in the project root for license information.
+﻿// Copyright 2005-2015 Giacomo Stelluti Scala & Contributors. All rights reserved. See License.md in the project root for license information.
 
 using System;
 using System.IO;
 using System.Reflection;
 using System.Text;
 using CommandLine.Infrastructure;
+using CSharpx;
 
 namespace CommandLine.Text
 {
@@ -19,23 +20,12 @@ namespace CommandLine.Text
 
         /// <summary>
         /// Initializes a new instance of the <see cref="CommandLine.Text.HeadingInfo"/> class
-        /// specifying program name.
-        /// </summary>
-        /// <param name="programName">The name of the program.</param>
-        /// <exception cref="System.ArgumentException">Thrown when parameter <paramref name="programName"/> is null or empty string.</exception>
-        public HeadingInfo(string programName)
-            : this(programName, null)
-        {
-        }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="CommandLine.Text.HeadingInfo"/> class
         /// specifying program name and version.
         /// </summary>
         /// <param name="programName">The name of the program.</param>
         /// <param name="version">The version of the program.</param>
         /// <exception cref="System.ArgumentException">Thrown when parameter <paramref name="programName"/> is null or empty string.</exception>
-        public HeadingInfo(string programName, string version)
+        public HeadingInfo(string programName, string version = null)
         {
             if (string.IsNullOrWhiteSpace("programName")) throw new ArgumentException("programName");
 
@@ -82,17 +72,12 @@ namespace CommandLine.Text
         /// <returns>The <see cref="System.String"/> that contains the heading.</returns>
         public override string ToString()
         {
-            bool isVersionNull = string.IsNullOrEmpty(this.version);
-            var builder = new StringBuilder(this.programName.Length +
-                (!isVersionNull ? this.version.Length + 1 : 0));
-            builder.Append(this.programName);
-            if (!isVersionNull)
-            {
-                builder.Append(' ');
-                builder.Append(this.version);
-            }
-
-            return builder.ToString();
+            var isVersionNull = string.IsNullOrEmpty(version);
+            return new StringBuilder(programName.Length +
+                    (!isVersionNull ? version.Length + 1 : 0))
+                .Append(programName)
+                .AppendWhen(!isVersionNull, " ", version)
+                .ToString();
         }
 
         /// <summary>
@@ -108,11 +93,12 @@ namespace CommandLine.Text
             if (string.IsNullOrWhiteSpace("message")) throw new ArgumentException("message");
             if (writer == null) throw new ArgumentNullException("writer");
 
-            var builder = new StringBuilder(this.programName.Length + message.Length + 2);
-            builder.Append(this.programName);
-            builder.Append(": ");
-            builder.Append(message);
-            writer.WriteLine(builder.ToString());
+            writer.WriteLine(
+                new StringBuilder(programName.Length + message.Length + 2)
+                    .Append(programName)
+                    .Append(": ")
+                    .Append(message)
+                    .ToString());
         }
 
         /// <summary>

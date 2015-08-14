@@ -1,10 +1,11 @@
-﻿// Copyright 2005-2013 Giacomo Stelluti Scala & Contributors. All rights reserved. See doc/License.md in the project root for license information.
+﻿// Copyright 2005-2015 Giacomo Stelluti Scala & Contributors. All rights reserved. See License.md in the project root for license information.
 
 using System;
 using System.Globalization;
 using System.Reflection;
 using System.Text;
 using CommandLine.Infrastructure;
+using CSharpx;
 
 namespace CommandLine.Text
 {
@@ -66,7 +67,7 @@ namespace CommandLine.Text
             this.isSymbolUpper = isSymbolUpper;
             this.author = author;
             this.copyrightYears = copyrightYears;
-            this.builderSize = 12 + author.Length + (4 * copyrightYears.Length) + ExtraLength;
+            builderSize = 12 + author.Length + (4 * copyrightYears.Length) + ExtraLength;
         }
 
         /// <summary>
@@ -137,20 +138,20 @@ namespace CommandLine.Text
         /// <returns>The <see cref="System.String"/> that contains the copyright.</returns>
         public override string ToString()
         {
-            if (this.attribute != null)
+            if (attribute != null)
             {
-                return this.attribute.Copyright;
+                return attribute.Copyright;
             }
 
-            var builder = new StringBuilder(this.builderSize);
-            builder.Append(CopyrightWord);
-            builder.Append(' ');
-            builder.Append(this.isSymbolUpper ? SymbolUpper : SymbolLower);
-            builder.Append(' ');
-            builder.Append(FormatYears(this.copyrightYears));
-            builder.Append(' ');
-            builder.Append(this.author);
-            return builder.ToString();
+            return new StringBuilder(builderSize)
+                .Append(CopyrightWord)
+                .Append(' ')
+                .Append(isSymbolUpper ? SymbolUpper : SymbolLower)
+                .Append(' ')
+                .Append(FormatYears(copyrightYears))
+                .Append(' ')
+                .Append(author)
+                .ToString();
         }
 
         /// <summary>
@@ -167,10 +168,10 @@ namespace CommandLine.Text
             }
 
             var yearsPart = new StringBuilder(years.Length * 6);
-            for (int i = 0; i < years.Length; i++)
+            for (var i = 0; i < years.Length; i++)
             {
                 yearsPart.Append(years[i].ToString(CultureInfo.InvariantCulture));
-                int next = i + 1;
+                var next = i + 1;
                 if (next < years.Length)
                 {
                     yearsPart.Append(years[next] - years[i] > 1 ? " - " : ", ");

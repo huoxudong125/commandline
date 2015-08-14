@@ -1,12 +1,13 @@
-﻿// Copyright 2005-2013 Giacomo Stelluti Scala & Contributors. All rights reserved. See doc/License.md in the project root for license information.
+﻿// Copyright 2005-2015 Giacomo Stelluti Scala & Contributors. All rights reserved. See License.md in the project root for license information.
 
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using CommandLine.Core;
-using CommandLine.Infrastructure;
 using CommandLine.Text;
+using CSharpx;
+using RailwaySharp.ErrorHandling;
 
 namespace CommandLine
 {
@@ -17,15 +18,15 @@ namespace CommandLine
     {
         private bool disposed;
         private readonly ParserSettings settings;
-        private static readonly Lazy<Parser> @default = new Lazy<Parser>(
-            () => new Parser(new ParserSettings{ HelpWriter = Console.Error }));
+        private static readonly Lazy<Parser> DefaultParser = new Lazy<Parser>(
+            () => new Parser(new ParserSettings { HelpWriter = Console.Error }));
 
         /// <summary>
         /// Initializes a new instance of the <see cref="CommandLine.Parser"/> class.
         /// </summary>
         public Parser()
         {
-            this.settings = new ParserSettings { Consumed = true };
+            settings = new ParserSettings { Consumed = true };
         }
 
         /// <summary>
@@ -38,9 +39,9 @@ namespace CommandLine
         {
             if (configuration == null) throw new ArgumentNullException("configuration");
 
-            this.settings = new ParserSettings();
-            configuration(this.settings);
-            this.settings.Consumed = true;
+            settings = new ParserSettings();
+            configuration(settings);
+            settings.Consumed = true;
         }
 
         internal Parser(ParserSettings settings)
@@ -62,7 +63,7 @@ namespace CommandLine
         /// </summary>
         public static Parser Default
         {
-            get { return @default.Value; }
+            get { return DefaultParser.Value; }
         }
 
         /// <summary>
@@ -70,7 +71,7 @@ namespace CommandLine
         /// </summary>
         public ParserSettings Settings
         {
-            get { return this.settings; }
+            get { return settings; }
         }
 
         /// <summary>
@@ -82,12 +83,23 @@ namespace CommandLine
         /// <returns>A <see cref="CommandLine.ParserResult{T}"/> containing an instance of type <typeparamref name="T"/> with parsed values
         /// and a sequence of <see cref="CommandLine.Error"/>.</returns>
         /// <exception cref="System.ArgumentNullException">Thrown if one or more arguments are null.</exception>
-        public ParserResult<T> ParseArguments<T>(string[] args)
-            where T : new()
+        public ParserResult<T> ParseArguments<T>(IEnumerable<string> args)
         {
             if (args == null) throw new ArgumentNullException("args");
 
-            return ParseArguments(() => new T(), args);
+            var factory = typeof(T).IsMutable()
+                ? Maybe.Just<Func<T>>(Activator.CreateInstance<T>)
+                : Maybe.Nothing<Func<T>>();
+
+            return MakeParserResult(
+                () => InstanceBuilder.Build(
+                    factory,
+                    (arguments, optionSpecs) => Tokenize(arguments, optionSpecs, settings),
+                    args,
+                    settings.NameComparer,
+                    settings.ParsingCulture,
+                    HandleUnknownArguments(settings.IgnoreUnknownArguments)),
+                settings);
         }
 
         /// <summary>
@@ -100,18 +112,21 @@ namespace CommandLine
         /// <returns>A <see cref="CommandLine.ParserResult{T}"/> containing an instance of type <typeparamref name="T"/> with parsed values
         /// and a sequence of <see cref="CommandLine.Error"/>.</returns>
         /// <exception cref="System.ArgumentNullException">Thrown if one or more arguments are null.</exception>
-        public ParserResult<T> ParseArguments<T>(Func<T> factory, string[] args)
+        public ParserResult<T> ParseArguments<T>(Func<T> factory, IEnumerable<string> args)
+            where T : new()
         {
             if (factory == null) throw new ArgumentNullException("factory");
+            if (!typeof(T).IsMutable()) throw new ArgumentException("factory");
             if (args == null) throw new ArgumentNullException("args");
 
             return MakeParserResult(
                 () => InstanceBuilder.Build(
-                    factory,
-                    (arguments, optionSpecs) => Tokenize(arguments, optionSpecs, this.settings),
+                    Maybe.Just(factory),
+                    (arguments, optionSpecs) => Tokenize(arguments, optionSpecs, settings),
                     args,
-                    this.settings.NameComparer,
-                    this.settings.ParsingCulture),
+                    settings.NameComparer,
+                    settings.ParsingCulture,
+                    HandleUnknownArguments(settings.IgnoreUnknownArguments)),
                 settings);
         }
 
@@ -127,7 +142,7 @@ namespace CommandLine
         /// <exception cref="System.ArgumentNullException">Thrown if one or more arguments are null.</exception>
         /// <exception cref="System.ArgumentOutOfRangeException">Thrown if <paramref name="types"/> array is empty.</exception>
         /// <remarks>All types must expose a parameterless constructor. It's stronly recommended to use a generic overload.</remarks>
-        public ParserResult<object> ParseArguments(string[] args, params Type[] types)
+        public ParserResult<object> ParseArguments(IEnumerable<string> args, params Type[] types)
         {
             if (args == null) throw new ArgumentNullException("args");
             if (types == null) throw new ArgumentNullException("types");
@@ -135,11 +150,12 @@ namespace CommandLine
 
             return MakeParserResult(
                 () => InstanceChooser.Choose(
-                    (arguments, optionSpecs) => Tokenize(arguments, optionSpecs, this.settings),
+                    (arguments, optionSpecs) => Tokenize(arguments, optionSpecs, settings),
                     types,
                     args,
-                    this.settings.NameComparer,
-                    this.settings.ParsingCulture),
+                    settings.NameComparer,
+                    settings.ParsingCulture,
+                    HandleUnknownArguments(settings.IgnoreUnknownArguments)),
                 settings);
         }
 
@@ -153,60 +169,61 @@ namespace CommandLine
             GC.SuppressFinalize(this);
         }
 
-        private static StatePair<IEnumerable<Token>> Tokenize(
+        private static Result<IEnumerable<Token>, Error> Tokenize(
                 IEnumerable<string> arguments,
                 IEnumerable<OptionSpecification> optionSpecs,
                 ParserSettings settings)
         {
-            return settings.EnableDashDash
+            var normalize = settings.IgnoreUnknownArguments
+                ? toks => Tokenizer.Normalize(toks,
+                    name => NameLookup.Contains(name, optionSpecs, settings.NameComparer) != NameLookupResult.NoOptionFound)
+                : new Func<IEnumerable<Token>, IEnumerable<Token>>(toks => toks);
+
+            var tokens = settings.EnableDashDash
                 ? Tokenizer.PreprocessDashDash(
                         arguments,
                         args =>
-                            Tokenizer.Tokenize(args, name => NameLookup.Contains(name, optionSpecs, settings.NameComparer)))
-                : Tokenizer.Tokenize(arguments, name => NameLookup.Contains(name, optionSpecs, settings.NameComparer));
+                            Tokenizer.Tokenize(args, name => NameLookup.Contains(name, optionSpecs, settings.NameComparer), normalize))
+                : Tokenizer.Tokenize(arguments, name => NameLookup.Contains(name, optionSpecs, settings.NameComparer), normalize);
+            var explodedTokens = Tokenizer.ExplodeOptionList(tokens, name => NameLookup.HavingSeparator(name, optionSpecs, settings.NameComparer));
+            return explodedTokens;
         }
 
         private static ParserResult<T> MakeParserResult<T>(Func<ParserResult<T>> parseFunc, ParserSettings settings)
         {
             return DisplayHelp(
-                HandleUnknownArguments(
-                    parseFunc(),
-                    settings.IgnoreUnknownArguments),
+                parseFunc(),
                 settings.HelpWriter);
         }
 
-        private static ParserResult<T> HandleUnknownArguments<T>(ParserResult<T> parserResult, bool ignoreUnknownArguments)
+        private static IEnumerable<ErrorType> HandleUnknownArguments(bool ignoreUnknownArguments)
         {
             return ignoreUnknownArguments
-                       ? parserResult.MapErrors(errs => errs.Where(e => e.Tag != ErrorType.UnknownOptionError))
-                       : parserResult;
+                ? Enumerable.Empty<ErrorType>().Concat(ErrorType.UnknownOptionError)
+                : Enumerable.Empty<ErrorType>();
         }
 
         private static ParserResult<T> DisplayHelp<T>(ParserResult<T> parserResult, TextWriter helpWriter)
         {
-            if (parserResult.Errors.Any())
-            {
-                helpWriter.ToMaybe().Do(writer => writer.Write(HelpText.AutoBuild(parserResult)));
-            }
+            parserResult.WithNotParsed(
+                errors =>
+                    Maybe.Merge(errors.ToMaybe(), helpWriter.ToMaybe())
+                        .Do((_, writer) => writer.Write(HelpText.AutoBuild(parserResult)))
+                );
 
             return parserResult;
         }
 
         private void Dispose(bool disposing)
         {
-            if (this.disposed)
-            {
-                return;
-            }
+            if (disposed) return;
 
             if (disposing)
             {
                 if (settings != null)
-                {
                     settings.Dispose();
-                }
 
-                this.disposed = true;
+                disposed = true;
             }
         }
     }

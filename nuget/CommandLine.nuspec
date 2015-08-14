@@ -1,24 +1,25 @@
 <?xml version='1.0'?>
 <package xmlns='http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd'>
     <metadata>
-        <id>CommandLineParser20</id>
-        <version>2.0.0.0</version>
-        <title>Command Line Parser Library 2.0</title>
+        <id>CommandLineParser</id>
+        <version>2.0.233-beta</version>
+        <title>Command Line Parser Library</title>
         <authors>Giacomo Stelluti Scala</authors>
-        <description>The Command Line Parser Library offers to CLR applications a clean and concise API for manipulating command line arguments and related tasks.</description>
-        <releaseNotes>This is a fork of the original project, including most pull requests made on it.</releaseNotes>
-        <copyright>Copyright (c) 2005 - 2013 Giacomo Stelluti Scala</copyright>
-        <licenseUrl>https://raw.github.com/cosmo0/commandline/master/doc/LICENSE</licenseUrl>
-        <projectUrl>https://github.com/cosmo0/commandline</projectUrl>
-        <owners>Thomas Broust</owners>
-        <iconUrl>https://github.com/cosmo0/commandline/raw/master/art/CommandLine.png</iconUrl>
+        <description>Terse syntax C# command line parser for .NET with F# support. The Command Line Parser Library offers to CLR applications a clean and concise API for manipulating command line arguments and related tasks.</description>
+        <releaseNotes/>
+        <copyright>Copyright (c) 2005 - 2015 Giacomo Stelluti Scala</copyright>
+        <licenseUrl>https://raw.githubusercontent.com/gsscoder/commandline/master/doc/LICENSE</licenseUrl>
+        <projectUrl>https://github.com/gsscoder/commandline</projectUrl>
+        <owners>Giacomo Stelluti Scala</owners>
+        <iconUrl>https://raw.githubusercontent.com/gsscoder/commandline/master/art/CommandLine20.png</iconUrl>
         <requireLicenseAcceptance>false</requireLicenseAcceptance>
         <tags>command line argument option parser parsing library syntax shell</tags>
     </metadata>
     <files>
-        <file src='..\build\CommandLine\Release\CommandLine.dll' target='lib\net40\CommandLine.dll'/>
-        <file src='..\build\CommandLine\Release\CommandLine.XML' target='lib\net40\CommandLine.XML'/>
-        <!-- TODO: generate packages for .Net 3.5 and 4.5 -->
+        <file src='..\build\CommandLine.dll' target='lib\net40\CommandLine.dll'/>
+        <file src='..\build\CommandLine.XML' target='lib\net40\CommandLine.XML'/>
+        <file src='..\build\CommandLine.dll' target='lib\net45\CommandLine.dll'/>
+        <file src='..\build\CommandLine.XML' target='lib\net45\CommandLine.XML'/>
         <file src='.\readme.txt' target='readme.txt'/>
     </files>
 </package>

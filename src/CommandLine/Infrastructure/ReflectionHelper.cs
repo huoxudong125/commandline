@@ -1,11 +1,14 @@
-﻿// Copyright 2005-2013 Giacomo Stelluti Scala & Contributors. All rights reserved. See doc/License.md in the project root for license information.
+﻿// Copyright 2005-2015 Giacomo Stelluti Scala & Contributors. All rights reserved. See License.md in the project root for license information.
 
 using System;
+using System.Linq;
 using System.Reflection;
+using CommandLine.Core;
+using CSharpx;
 
 namespace CommandLine.Infrastructure
 {
-    internal static class ReflectionHelper
+    static class ReflectionHelper
     {
         public static Maybe<TAttribute> GetAttribute<TAttribute>()
             where TAttribute : Attribute
@@ -28,6 +31,29 @@ namespace CommandLine.Infrastructure
         {
             var assembly = Assembly.GetEntryAssembly() ?? Assembly.GetExecutingAssembly();
             return assembly.GetName().Version.ToStringInvariant();
+        }
+
+        public static bool IsFSharpOptionType(Type type)
+        {
+            return type.FullName.StartsWith(
+                "Microsoft.FSharp.Core.FSharpOption`1", StringComparison.Ordinal);
+        }
+
+        public static T CreateDefaultImmutableInstance<T>(Type[] constructorTypes)
+        {
+            var t = typeof(T);
+            var ctor = t.GetConstructor(constructorTypes);
+            var values = (from prms in ctor.GetParameters()
+                          select prms.ParameterType.CreateDefaultForImmutable()).ToArray();
+            return (T)ctor.Invoke(values);
+        }
+
+        public static object CreateDefaultImmutableInstance(Type type, Type[] constructorTypes)
+        {
+            var ctor = type.GetConstructor(constructorTypes);
+            var values = (from prms in ctor.GetParameters()
+                          select prms.ParameterType.CreateDefaultForImmutable()).ToArray();
+            return ctor.Invoke(values);
         }
     }
 }

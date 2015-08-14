@@ -1,31 +1,43 @@
-﻿// Copyright 2005-2013 Giacomo Stelluti Scala & Contributors. All rights reserved. See doc/License.md in the project root for license information.
+﻿// Copyright 2005-2015 Giacomo Stelluti Scala & Contributors. All rights reserved. See License.md in the project root for license information.
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using CommandLine.Infrastructure;
+using CSharpx;
 
 namespace CommandLine.Core
 {
-    internal enum SpecificationType
+    enum SpecificationType
     {
         Option,
         Value
     }
 
-    internal abstract class Specification
+    enum TargetType
+    {
+        Switch,
+        Scalar,
+        Sequence
+    }
+
+    abstract class Specification
     {
         private readonly SpecificationType tag;
         private readonly bool required;
-        private readonly int min;
-        private readonly int max;
+        private readonly Maybe<int> min;
+        private readonly Maybe<int> max;
         private readonly Maybe<object> defaultValue;
-        /// <summary>
+        private readonly string helpText;
+        private readonly string metaValue;
+        private readonly IEnumerable<string> enumValues;
         /// This information is denormalized to decouple Specification from PropertyInfo.
-        /// </summary>
-        private readonly System.Type conversionType;
+        private readonly Type conversionType;
+        private readonly TargetType targetType;
 
-        protected Specification(SpecificationType tag, bool required, int min, int max, Maybe<object> defaultValue, System.Type conversionType)
+        protected Specification(SpecificationType tag, bool required, Maybe<int> min, Maybe<int> max,
+            Maybe<object> defaultValue, string helpText, string metaValue, IEnumerable<string> enumValues,
+            Type conversionType, TargetType targetType)
         {
             this.tag = tag;
             this.required = required;
@@ -33,54 +45,75 @@ namespace CommandLine.Core
             this.max = max;
             this.defaultValue = defaultValue;
             this.conversionType = conversionType;
+            this.targetType = targetType;
+            this.helpText = helpText;
+            this.metaValue = metaValue;
+            this.enumValues = enumValues;
         }
 
         public SpecificationType Tag 
         {
-            get { return this.tag; }
+            get { return tag; }
         }
 
         public bool Required
         {
-            get { return this.required; }
+            get { return required; }
         }
 
-        public int Min
+        public Maybe<int> Min
         {
-            get { return this.min; }
+            get { return min; }
         }
 
-        public int Max
+        public Maybe<int> Max
         {
-            get { return this.max; }
+            get { return max; }
         }
 
         public Maybe<object> DefaultValue
         {
-            get { return this.defaultValue; }
+            get { return defaultValue; }
         }
 
-        public System.Type ConversionType
+        public string HelpText
         {
-            get { return this.conversionType; }
+            get { return helpText; }
+        }
+
+        public string MetaValue
+        {
+            get { return metaValue; }
+        }
+
+        public IEnumerable<string> EnumValues
+        {
+            get { return enumValues; }
+        }
+
+        public Type ConversionType
+        {
+            get { return conversionType; }
+        }
+
+        public TargetType TargetType
+        {
+            get { return targetType; }
         }
 
         public static Specification FromProperty(PropertyInfo property)
-        {
-            System.Collections.Generic.List<string> enumList = new System.Collections.Generic.List<string>();
-            if (property.PropertyType.IsEnum)
-            {
-                enumList.AddRange(Enum.GetNames(property.PropertyType));
-            }
-            
+        {       
             var attrs = property.GetCustomAttributes(true);
             var oa = attrs.OfType<OptionAttribute>();
             if (oa.Count() == 1)
             {
-                var spec = OptionSpecification.FromAttribute(oa.Single(), property.PropertyType, enumList);
+                var spec = OptionSpecification.FromAttribute(oa.Single(), property.PropertyType,
+                    property.PropertyType.IsEnum
+                        ? Enum.GetNames(property.PropertyType)
+                        : Enumerable.Empty<string>());
                 if (spec.ShortName.Length == 0 && spec.LongName.Length == 0)
                 {
-                    return spec.WithLongName(property.Name.ToLowerInvariant(), enumList);
+                    return spec.WithLongName(property.Name.ToLowerInvariant());
                 }
                 return spec;
             }
@@ -88,7 +121,10 @@ namespace CommandLine.Core
             var va = attrs.OfType<ValueAttribute>();
             if (va.Count() == 1)
             {
-                return ValueSpecification.FromAttribute(va.Single(), property.PropertyType);
+                return ValueSpecification.FromAttribute(va.Single(), property.PropertyType,
+                    property.PropertyType.IsEnum
+                        ? Enum.GetNames(property.PropertyType)
+                        : Enumerable.Empty<string>());
             }
 
             throw new InvalidOperationException();
